@@ -1,7 +1,7 @@
 # main.py
 """
 美梦AI多账号签到工具
-支持多个账号同时签到
+支持多个账号同时签到，自动保存账号
 """
 import os
 import threading
@@ -28,7 +28,6 @@ from app.your_code import MeimoAutoSign
 def setup_fonts():
     """设置中文字体"""
     font_paths = [
-        # Android 系统字体路径
         '/system/fonts/NotoSansCJK-Regular.ttc',
         '/system/fonts/NotoSansSC-Regular.otf',
         '/system/fonts/DroidSansFallback.ttf',
@@ -44,11 +43,9 @@ def setup_fonts():
             except:
                 continue
     
-    # 如果都没找到，使用默认字体
     print("未找到中文字体，使用默认字体")
     return None
 
-# 设置字体
 DEFAULT_FONT = setup_fonts()
 
 # 颜色主题
@@ -63,7 +60,7 @@ COLORS = {
 
 
 class StyledTextInput(TextInput):
-    """自定义输入框（支持中文）"""
+    """自定义输入框"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.background_color = COLORS['card']
@@ -74,7 +71,7 @@ class StyledTextInput(TextInput):
 
 
 class StyledButton(Button):
-    """自定义按钮（支持中文）"""
+    """自定义按钮"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.background_normal = ''
@@ -83,7 +80,7 @@ class StyledButton(Button):
 
 
 class StyledLabel(Label):
-    """自定义标签（支持中文）"""
+    """自定义标签"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.font_name = DEFAULT_FONT if DEFAULT_FONT else 'Roboto'
@@ -92,7 +89,7 @@ class StyledLabel(Label):
 
 class AccountRow(BoxLayout):
     """单个账号行"""
-    def __init__(self, **kwargs):
+    def __init__(self, username='', password='', **kwargs):
         super().__init__(**kwargs)
         self.orientation = 'horizontal'
         self.size_hint_y = None
@@ -102,6 +99,7 @@ class AccountRow(BoxLayout):
         # 账号输入
         self.username = StyledTextInput(
             hint_text='账号',
+            text=username,
             multiline=False,
             size_hint_x=0.4
         )
@@ -110,6 +108,7 @@ class AccountRow(BoxLayout):
         # 密码输入
         self.password = StyledTextInput(
             hint_text='密码',
+            text=password,
             multiline=False,
             password=True,
             size_hint_x=0.4
@@ -123,16 +122,27 @@ class AccountRow(BoxLayout):
             background_color=COLORS['error']
         )
         self.add_widget(self.del_btn)
+    
+    def get_account(self):
+        """获取账号密码"""
+        return {
+            'username': self.username.text.strip(),
+            'password': self.password.text.strip()
+        }
 
 
 class SignApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.accounts = []
+        self.accounts_file = 'accounts.json'  # 保存账号的文件
         
     def build(self):
         self.title = '美梦AI签到'
         Window.clearcolor = COLORS['bg']
+        
+        # 加载保存的账号
+        self.load_accounts()
         
         # 主布局
         main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
@@ -166,6 +176,14 @@ class SignApp(App):
         add_btn.bind(on_press=self.add_account)
         btn_layout.add_widget(add_btn)
         
+        # 保存账号按钮
+        save_btn = StyledButton(
+            text='保存账号',
+            background_color=COLORS['secondary'] if 'secondary' in COLORS else COLORS['card']
+        )
+        save_btn.bind(on_press=self.save_accounts)
+        btn_layout.add_widget(save_btn)
+        
         # 开始签到按钮
         self.sign_btn = StyledButton(
             text='开始签到',
@@ -192,26 +210,62 @@ class SignApp(App):
         result_scroll.add_widget(self.result_layout)
         main_layout.add_widget(result_scroll)
         
-        # 先添加一个默认的账号行
-        self.add_account()
+        # 如果没加载到账号，添加一个默认的空账号行
+        if not self.accounts:
+            self.add_account()
         
         return main_layout
     
-    def add_account(self, instance=None):
+    def load_accounts(self):
+        """从文件加载保存的账号"""
+        try:
+            if os.path.exists(self.accounts_file):
+                with open(self.accounts_file, 'r', encoding='utf-8') as f:
+                    saved_accounts = json.load(f)
+                    for acc in saved_accounts:
+                        self.add_account(username=acc.get('username', ''), 
+                                       password=acc.get('password', ''))
+                    print(f"加载了 {len(saved_accounts)} 个账号")
+        except Exception as e:
+            print(f"加载账号失败: {e}")
+    
+    def save_accounts(self, instance=None):
+        """保存账号到文件"""
+        try:
+            # 收集所有账号
+            accounts_to_save = []
+            for row in self.accounts_layout.children:
+                if isinstance(row, AccountRow):
+                    acc = row.get_account()
+                    if acc['username'] and acc['password']:  # 只保存非空的账号
+                        accounts_to_save.append(acc)
+            
+            # 保存到文件
+            with open(self.accounts_file, 'w', encoding='utf-8') as f:
+                json.dump(accounts_to_save, f, ensure_ascii=False, indent=2)
+            
+            self.show_result(f'✅ 已保存 {len(accounts_to_save)} 个账号')
+            
+        except Exception as e:
+            self.show_result(f'❌ 保存失败: {e}')
+    
+    def add_account(self, instance=None, username='', password=''):
         """添加新的账号行"""
-        row = AccountRow()
+        row = AccountRow(username=username, password=password)
         row.del_btn.bind(on_press=lambda x: self.remove_account(row))
         self.accounts_layout.add_widget(row)
-        self.accounts.append(row)
     
     def remove_account(self, row):
         """删除账号行"""
-        if row in self.accounts:
-            self.accounts.remove(row)
-            self.accounts_layout.remove_widget(row)
+        self.accounts_layout.remove_widget(row)
+        # 自动保存
+        self.save_accounts()
     
     def start_sign(self, instance):
         """开始签到"""
+        # 先保存当前账号
+        self.save_accounts()
+        
         # 禁用按钮
         self.sign_btn.disabled = True
         self.sign_btn.text = '签到中...'
@@ -221,11 +275,11 @@ class SignApp(App):
         
         # 收集要签到的账号
         accounts_to_sign = []
-        for row in self.accounts:
-            username = row.username.text.strip()
-            password = row.password.text.strip()
-            if username and password:
-                accounts_to_sign.append((username, password))
+        for row in self.accounts_layout.children:
+            if isinstance(row, AccountRow):
+                acc = row.get_account()
+                if acc['username'] and acc['password']:
+                    accounts_to_sign.append((acc['username'], acc['password']))
         
         if not accounts_to_sign:
             self.show_result('没有输入任何账号密码')
@@ -255,7 +309,6 @@ class SignApp(App):
                 elif '今日已经签到过了' in result:
                     self.show_result(f'ℹ️ 账号 {username} 今日已签到')
                 else:
-                    # 显示错误信息的第一行
                     error_line = result.split('\n')[0]
                     self.show_result(f'❌ 账号 {username} 失败: {error_line[:30]}')
                     
@@ -277,10 +330,8 @@ class SignApp(App):
     @mainthread
     def show_result(self, text):
         """显示结果"""
-        # 添加时间戳
         timestamp = datetime.now().strftime('%H:%M:%S')
         
-        # 创建结果标签
         if '✅' in text:
             color = COLORS['success']
         elif '❌' in text:
