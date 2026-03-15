@@ -1,4 +1,5 @@
 # main.py
+import requests
 import os
 import sys
 import threading
@@ -25,14 +26,13 @@ from kivy.utils import get_color_from_hex, platform
 
 # ========== 错误处理 ==========
 def safe_get_data_dir():
-    """安全获取数据目录（借鉴你的代码）"""
+    """安全获取数据目录"""
     try:
         if platform == 'android':
             # 尝试多个外部存储路径
             possible_dirs = [
                 "/sdcard/美墨签到",
                 "/storage/emulated/0/美墨签到",
-                "/storage/sdcard0/美墨签到",
             ]
             
             for dir_path in possible_dirs:
