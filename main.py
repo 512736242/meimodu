@@ -24,6 +24,33 @@ from kivy.utils import get_color_from_hex
 # 导入你的签到脚本
 from app.your_code import MeimoAutoSign
 
+# ========== 字体设置 ==========
+def setup_fonts():
+    """设置中文字体"""
+    font_paths = [
+        # Android 系统字体路径
+        '/system/fonts/NotoSansCJK-Regular.ttc',
+        '/system/fonts/NotoSansSC-Regular.otf',
+        '/system/fonts/DroidSansFallback.ttf',
+        '/system/fonts/Roboto-Regular.ttf',
+    ]
+    
+    for font_path in font_paths:
+        if os.path.exists(font_path):
+            try:
+                LabelBase.register(name='ChineseFont', fn_regular=font_path)
+                print(f"找到字体: {font_path}")
+                return 'ChineseFont'
+            except:
+                continue
+    
+    # 如果都没找到，使用默认字体
+    print("未找到中文字体，使用默认字体")
+    return None
+
+# 设置字体
+DEFAULT_FONT = setup_fonts()
+
 # 颜色主题
 COLORS = {
     'bg': get_color_from_hex('#1a1a2e'),
@@ -33,6 +60,34 @@ COLORS = {
     'success': get_color_from_hex('#4ecca3'),
     'error': get_color_from_hex('#ff6b6b'),
 }
+
+
+class StyledTextInput(TextInput):
+    """自定义输入框（支持中文）"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_color = COLORS['card']
+        self.foreground_color = COLORS['text']
+        self.cursor_color = COLORS['primary']
+        self.font_name = DEFAULT_FONT if DEFAULT_FONT else 'Roboto'
+        self.font_size = dp(14)
+
+
+class StyledButton(Button):
+    """自定义按钮（支持中文）"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_normal = ''
+        self.font_name = DEFAULT_FONT if DEFAULT_FONT else 'Roboto'
+        self.font_size = dp(14)
+
+
+class StyledLabel(Label):
+    """自定义标签（支持中文）"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.font_name = DEFAULT_FONT if DEFAULT_FONT else 'Roboto'
+        self.font_size = dp(14)
 
 
 class AccountRow(BoxLayout):
@@ -45,34 +100,27 @@ class AccountRow(BoxLayout):
         self.spacing = dp(5)
         
         # 账号输入
-        self.username = TextInput(
+        self.username = StyledTextInput(
             hint_text='账号',
             multiline=False,
-            size_hint_x=0.35,
-            background_color=COLORS['card'],
-            foreground_color=COLORS['text'],
-            cursor_color=COLORS['primary']
+            size_hint_x=0.4
         )
         self.add_widget(self.username)
         
         # 密码输入
-        self.password = TextInput(
+        self.password = StyledTextInput(
             hint_text='密码',
             multiline=False,
             password=True,
-            size_hint_x=0.35,
-            background_color=COLORS['card'],
-            foreground_color=COLORS['text'],
-            cursor_color=COLORS['primary']
+            size_hint_x=0.4
         )
         self.add_widget(self.password)
         
         # 删除按钮
-        self.del_btn = Button(
-            text='✕',
-            size_hint_x=0.1,
-            background_color=COLORS['error'],
-            color=COLORS['text']
+        self.del_btn = StyledButton(
+            text='删除',
+            size_hint_x=0.15,
+            background_color=COLORS['error']
         )
         self.add_widget(self.del_btn)
 
@@ -80,8 +128,7 @@ class AccountRow(BoxLayout):
 class SignApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.accounts = []  # 账号列表
-        self.results = []   # 结果列表
+        self.accounts = []
         
     def build(self):
         self.title = '美梦AI签到'
@@ -91,18 +138,18 @@ class SignApp(App):
         main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
         
         # 标题
-        title = Label(
+        title = StyledLabel(
             text='美梦AI 多账号签到',
             size_hint_y=None,
             height=dp(50),
-            font_size=dp(20),
-            color=COLORS['text'],
-            bold=True
+            font_size=dp(22),
+            bold=True,
+            color=COLORS['primary']
         )
         main_layout.add_widget(title)
         
-        # 账号列表区域（可滚动）
-        scroll = ScrollView(size_hint_y=0.7)
+        # 账号列表区域
+        scroll = ScrollView(size_hint_y=0.6)
         self.accounts_layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=5)
         self.accounts_layout.bind(minimum_height=self.accounts_layout.setter('height'))
         scroll.add_widget(self.accounts_layout)
@@ -112,19 +159,17 @@ class SignApp(App):
         btn_layout = BoxLayout(size_hint_y=None, height=dp(50), spacing=10)
         
         # 添加账号按钮
-        add_btn = Button(
+        add_btn = StyledButton(
             text='+ 添加账号',
-            background_color=COLORS['card'],
-            color=COLORS['text']
+            background_color=COLORS['card']
         )
         add_btn.bind(on_press=self.add_account)
         btn_layout.add_widget(add_btn)
         
         # 开始签到按钮
-        self.sign_btn = Button(
+        self.sign_btn = StyledButton(
             text='开始签到',
-            background_color=COLORS['primary'],
-            color=COLORS['text']
+            background_color=COLORS['primary']
         )
         self.sign_btn.bind(on_press=self.start_sign)
         btn_layout.add_widget(self.sign_btn)
@@ -132,16 +177,16 @@ class SignApp(App):
         main_layout.add_widget(btn_layout)
         
         # 结果显示区域
-        result_label = Label(
+        result_label = StyledLabel(
             text='签到结果',
             size_hint_y=None,
             height=dp(30),
-            color=COLORS['text']
+            bold=True
         )
         main_layout.add_widget(result_label)
         
         # 结果列表
-        result_scroll = ScrollView(size_hint_y=0.2)
+        result_scroll = ScrollView(size_hint_y=0.25)
         self.result_layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=2)
         self.result_layout.bind(minimum_height=self.result_layout.setter('height'))
         result_scroll.add_widget(self.result_layout)
@@ -235,7 +280,7 @@ class SignApp(App):
         # 添加时间戳
         timestamp = datetime.now().strftime('%H:%M:%S')
         
-        # 根据结果类型设置颜色
+        # 创建结果标签
         if '✅' in text:
             color = COLORS['success']
         elif '❌' in text:
@@ -245,8 +290,7 @@ class SignApp(App):
         else:
             color = COLORS['text']
         
-        # 创建结果标签
-        label = Label(
+        label = StyledLabel(
             text=f'[{timestamp}] {text}',
             size_hint_y=None,
             height=dp(25),
@@ -256,9 +300,6 @@ class SignApp(App):
             text_size=(Window.width - 40, dp(25))
         )
         self.result_layout.add_widget(label)
-        
-        # 自动滚动到底部（简单实现）
-        Clock.schedule_once(lambda dt: setattr(self.result_layout.parent, 'scroll_y', 0), 0.1)
 
 
 if __name__ == '__main__':
