@@ -53,6 +53,7 @@ COLORS = {
     'bg': get_color_from_hex('#1a1a2e'),
     'card': get_color_from_hex('#16213e'),
     'primary': get_color_from_hex('#e94560'),
+    'secondary': get_color_from_hex('#0f3460'),
     'text': get_color_from_hex('#eaeaea'),
     'success': get_color_from_hex('#4ecca3'),
     'error': get_color_from_hex('#ff6b6b'),
@@ -135,14 +136,27 @@ class SignApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.accounts = []
-        self.accounts_file = 'accounts.json'  # 保存账号的文件
+        # 获取应用私有目录，确保有写入权限
+        self.data_dir = self.get_data_dir()
+        self.accounts_file = os.path.join(self.data_dir, 'accounts.json')
+        print(f"账号文件位置: {self.accounts_file}")
+        
+    def get_data_dir(self):
+        """获取数据保存目录"""
+        try:
+            # Android 平台
+            from android.storage import primary_external_storage_path
+            sdcard = primary_external_storage_path()
+            app_dir = os.path.join(sdcard, 'MeimoSign')
+            os.makedirs(app_dir, exist_ok=True)
+            return app_dir
+        except:
+            # 非 Android 平台
+            return os.path.dirname(os.path.abspath(__file__))
         
     def build(self):
         self.title = '美梦AI签到'
         Window.clearcolor = COLORS['bg']
-        
-        # 加载保存的账号
-        self.load_accounts()
         
         # 主布局
         main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
@@ -171,7 +185,7 @@ class SignApp(App):
         # 添加账号按钮
         add_btn = StyledButton(
             text='+ 添加账号',
-            background_color=COLORS['card']
+            background_color=COLORS['secondary']
         )
         add_btn.bind(on_press=self.add_account)
         btn_layout.add_widget(add_btn)
@@ -179,7 +193,7 @@ class SignApp(App):
         # 保存账号按钮
         save_btn = StyledButton(
             text='保存账号',
-            background_color=COLORS['secondary'] if 'secondary' in COLORS else COLORS['card']
+            background_color=COLORS['secondary']
         )
         save_btn.bind(on_press=self.save_accounts)
         btn_layout.add_widget(save_btn)
@@ -210,8 +224,11 @@ class SignApp(App):
         result_scroll.add_widget(self.result_layout)
         main_layout.add_widget(result_scroll)
         
+        # ===== 关键修复：先加载保存的账号 =====
+        self.load_accounts()
+        
         # 如果没加载到账号，添加一个默认的空账号行
-        if not self.accounts:
+        if len(self.accounts_layout.children) == 0:
             self.add_account()
         
         return main_layout
@@ -222,12 +239,24 @@ class SignApp(App):
             if os.path.exists(self.accounts_file):
                 with open(self.accounts_file, 'r', encoding='utf-8') as f:
                     saved_accounts = json.load(f)
+                    print(f"找到保存的账号文件，共 {len(saved_accounts)} 个账号")
+                    
+                    # 清空现有账号行
+                    self.accounts_layout.clear_widgets()
+                    
+                    # 添加保存的账号
                     for acc in saved_accounts:
-                        self.add_account(username=acc.get('username', ''), 
-                                       password=acc.get('password', ''))
-                    print(f"加载了 {len(saved_accounts)} 个账号")
+                        self.add_account(
+                            username=acc.get('username', ''),
+                            password=acc.get('password', '')
+                        )
+                    
+                    self.show_result(f'✅ 已加载 {len(saved_accounts)} 个保存的账号')
+            else:
+                print("没有找到保存的账号文件")
         except Exception as e:
             print(f"加载账号失败: {e}")
+            self.show_result(f'❌ 加载账号失败: {e}')
     
     def save_accounts(self, instance=None):
         """保存账号到文件"""
@@ -237,7 +266,7 @@ class SignApp(App):
             for row in self.accounts_layout.children:
                 if isinstance(row, AccountRow):
                     acc = row.get_account()
-                    if acc['username'] and acc['password']:  # 只保存非空的账号
+                    if acc['username']:  # 只要有账号就保存，密码可以为空
                         accounts_to_save.append(acc)
             
             # 保存到文件
@@ -245,9 +274,11 @@ class SignApp(App):
                 json.dump(accounts_to_save, f, ensure_ascii=False, indent=2)
             
             self.show_result(f'✅ 已保存 {len(accounts_to_save)} 个账号')
+            print(f"账号已保存到: {self.accounts_file}")
             
         except Exception as e:
             self.show_result(f'❌ 保存失败: {e}')
+            print(f"保存失败: {e}")
     
     def add_account(self, instance=None, username='', password=''):
         """添加新的账号行"""
